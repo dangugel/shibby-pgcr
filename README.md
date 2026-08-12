@@ -1,5 +1,5 @@
-# shibby-app
-Windows application that captures local Halo MCC activity and sends it to the Shibby API.
+# shibby-pgcr
+Records MCC Carnage Reports into a JSONL format for aggregation and reporting.
 
 
 # Build
