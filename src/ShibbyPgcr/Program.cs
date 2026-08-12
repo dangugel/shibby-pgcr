@@ -11,6 +11,18 @@ namespace ShibbyPgcr
     {
         static async Task Main(string[] args)
         {
+            if (args.Length > 0)
+            {
+                List<ScoreboardEntry> scoreboard = BuildScoreboard(
+                    args.ToList()
+                );
+
+                PrintScoreboard(scoreboard);
+                return;
+            }
+
+
+
             Console.WriteLine("Shibby Reporter");
             Console.WriteLine("==========================");
             Console.WriteLine();
@@ -26,6 +38,41 @@ namespace ShibbyPgcr
                 ExportReport(report);
             }
         }
+
+        public static void PrintScoreboard(List<ScoreboardEntry> scoreboard)
+        {
+            Console.WriteLine();
+
+            Console.WriteLine(
+                $"{"Gamertag",-20} " +
+                $"{"Kills",7} " +
+                $"{"Deaths",8} " +
+                $"{"Assists",9} " +
+                $"{"+/-",7} " +
+                $"{"Score",9} " +
+                $"{"Best Streak",12}"
+            );
+
+            Console.WriteLine(new string('-', 80));
+
+            foreach (ScoreboardEntry player in scoreboard.OrderByDescending(p => p.Score))
+            {
+                Console.WriteLine(
+                    $"{player.Gamertag,-20} " +
+                    $"{player.Kills,7} " +
+                    $"{player.Deaths,8} " +
+                    $"{player.Assists,9} " +
+                    $"{player.PlusMinus,7} " +
+                    $"{player.Score,9} " +
+                    $"{player.MostKillsInARow,12}"
+                );
+            }
+
+            Console.WriteLine();
+        }
+
+
+
 
         private static void PrintReport(
             MultiplayerCarnageReport report)
@@ -141,6 +188,101 @@ namespace ShibbyPgcr
             }
         }
 
+
+
+        public class ScoreboardEntry
+        {
+            public string XboxUserId { get; set; } = "";
+            public string Gamertag { get; set; } = "";
+            public int Kills { get; set; }
+            public int Deaths { get; set; }
+            public int Assists { get; set; }
+            public int PlusMinus => Kills - Deaths;
+            public int Score { get; set; }
+            public int MostKillsInARow { get; set; }
+        }
+
+        public static List<ScoreboardEntry> BuildScoreboard(
+            List<string> jsonlFilePaths)
+        {
+            var processedGames = new HashSet<string>();
+            var scoreboard = new Dictionary<string, ScoreboardEntry>();
+
+            foreach (string filePath in jsonlFilePaths)
+            {
+                if (!File.Exists(filePath))
+                {
+                    continue;
+                }
+
+                foreach (string line in File.ReadLines(filePath))
+                {
+                    if (string.IsNullOrWhiteSpace(line))
+                    {
+                        continue;
+                    }
+
+                    MultiplayerCarnageReport? report;
+
+                    try
+                    {
+                        report = JsonSerializer.Deserialize<MultiplayerCarnageReport>(line);
+                    }
+                    catch (JsonException)
+                    {
+                        continue;
+                    }
+
+                    if (report == null)
+                    {
+                        continue;
+                    }
+
+                    string gameId = report.GameUniqueId.Value;
+
+                    // Don't process the same game more than once,
+                    // even if it exists in multiple JSONL files.
+                    if (!processedGames.Add(gameId))
+                    {
+                        continue;
+                    }
+
+                    foreach (Player player in report.Players)
+                    {
+                        string playerId = player.XboxUserId;
+
+                        if (!scoreboard.TryGetValue(playerId, out ScoreboardEntry? entry))
+                        {
+                            entry = new ScoreboardEntry
+                            {
+                                XboxUserId = player.XboxUserId,
+                                Gamertag = player.Gamertag,
+                                Kills = 0,
+                                Deaths = 0,
+                                Assists = 0,
+                                Score = 0,
+                                MostKillsInARow = 0
+                            };
+
+                            scoreboard.Add(playerId, entry);
+                        }
+
+                        entry.Gamertag = player.Gamertag;
+                        entry.Kills += player.Kills;
+                        entry.Deaths += player.Deaths;
+                        entry.Assists += player.Assists;
+                        entry.Score += player.Score;
+
+                        if (player.MostKillsInARow > entry.MostKillsInARow)
+                        {
+                            entry.MostKillsInARow = player.MostKillsInARow;
+                        }
+                    }
+                }
+            }
+
+            return scoreboard.Values.ToList();
+        }
 
    }
 }
